@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: batch5-deployment
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: batch5
+
+  template:
+    metadata:
+      labels:
+        app: batch5
+
+    spec:
+      containers:
+        - name: batch5-container
+          image: swaphub92/batch5-image:latest
+
+          ports:
+            - containerPort: 8080

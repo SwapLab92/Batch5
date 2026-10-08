@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: batch5-service
+
+spec:
+  type: NodePort
+
+  selector:
+    app: batch5
+
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: 30080
