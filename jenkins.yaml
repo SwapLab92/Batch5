@@ -1,0 +1,108 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_HUB_USER = "swaphub92"
+        IMAGE_NAME = "batch5-image"
+        IMAGE_TAG = "${BUILD_NUMBER}"
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/SwapLab92/Batch5.git'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                '''
+            }
+        }
+
+        stage('Verify Image') {
+            steps {
+                sh '''
+                    docker images | grep ${IMAGE_NAME}
+                '''
+            }
+        }
+
+        stage('Docker Hub Login') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USER" --password-stdin
+                    '''
+                }
+            }
+        }
+
+        stage('Tag Image') {
+            steps {
+                sh '''
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                    ${DOCKER_HUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}
+
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                    ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest
+                '''
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                sh '''
+                    docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:latest
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                    sed "s/IMAGE_TAG/${IMAGE_TAG}/g" deployment.yaml > deployment-final.yaml
+
+                    kubectl apply -f deployment-final.yaml
+                    kubectl apply -f svc.yaml
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    kubectl get deployment
+                    kubectl get pods
+                    kubectl get svc
+                '''
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo 'Docker image pushed and application deployed successfully'
+        }
+
+        failure {
+            echo 'Pipeline failed'
+        }
+
+        always {
+            sh 'docker logout || true'
+        }
+    }
+}
